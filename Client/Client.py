@@ -9,24 +9,53 @@ import time
 
 
 class ReadThread (threading.Thread):
-    def __init__(self,name,csoc,threadQueue,screenQueue):
+    def __init__(self,name,csoc,threadQueue,screenQueue,app):
         threading.Thread.__init__(self)
         self.name = name
         self.csoc = csoc
         self.nickname = ""
         self.threadQueue = threadQueue
-        self.screenQueue = screenQueue
+        self.screenQueue = screenQueue #...
+        self.app = app
 
     def incoming_parser(self,data):
-        #...
-        #...
+        if len(data) == 0:
+            return "Error!!!"
+        if len(data) > 3 and not data[3] == "":
+            response = "ERR"
+            self.csoc.send(response)
+            return "Error"
+        if data[0:3] == "HEL":
+            #Yeni Kullanıcı olarak kabul edildiniz
+        elif data[0:3] == "REJ":
+            #Kullanıcı olarak kabul edilMEdiniz
+        elif data[0:3] == "BYE":
+            #Çıkış
+        elif data[0:3] == "LSA":
+            #user List = data[4:] Kullanıcı Listesi geldi
+        elif data[0:3] == "TOC":
+            #Bağlantı testi başarılı
+        elif data[0:3] == "SOK":
+            #Genel mesaj gönderme başarılı
+        elif data[0:3] == "MOK":
+            #Özel mesaj gönderme başarılı
+        elif data[0:3] == "MNO":
+            #Özel mesaj hedefi bulunamadı
+        elif data[0:3] == "ERR":
+            #Hatalı Komut gönderdiniz
+        elif data[0:3] == "ERL":
+            #Giriş yapılaMAdı; login olmalısınız
         #...
 
     def run(self):
         while True:
-            data = self.csoc.recv(1024)
-            #...
-            #...
+            try:
+                data = self.csoc.recv(1024)
+                self.app.cprint(self.incoming_parser(data))
+            except:
+                pass
+            if data[0:3] == "BYE":
+                self.csoc.close()
             #...
 
 class WriteThread (threading.Thread):
@@ -37,19 +66,13 @@ class WriteThread (threading.Thread):
         self.threadQueue = threadQueue
 
     def run(self):
-        #...
-        #...
-        #...
-        if self.threadQueue.qsize() > 0:
-            queue_message = self.threadQueue.get()
-            #...
-            #...
-            #...
-            try:
-                self.csoc.send(queue_message)
-            except socket.error:
-                self.csoc.close()
-                break
+        while True:
+            if self.threadQueue.qsize() > 0:
+                queue_message = self.threadQueue.get()
+                try:
+                    self.csoc.send(queue_message)
+                except socket.error:
+                    self.csoc.close()
 
 class ClientDialog(QDialog):
     def __init__(self,threadQueue,screenQueue):
@@ -107,9 +130,6 @@ class ClientDialog(QDialog):
         self.setLayout(self.vbox)
 
     def cprint(self,data):
-        #...
-        #...
-        #...
         self.channel.append(data)
 
     def updateChannelWindow(self):
