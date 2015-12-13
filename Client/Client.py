@@ -18,6 +18,7 @@ class ReadThread (threading.Thread):
         self.threadQueue = threadQueue
         self.screenQueue = screenQueue #...
         self.app = app
+        self.userListe=[]
 
 #ReadThread incoming parser
     def incoming_parser(self,data):
@@ -29,10 +30,15 @@ class ReadThread (threading.Thread):
             response = "ERR"
             self.csoc.send(response)
             return "Error"
+        if data[0:3] == "TIC":
+            response = "TOC"
+            self.csoc.send(response)
+            return "NoDisplay"
         if data[0:3] == "LSA":
             userList = data[4:].split(':')
             for user in userList:
-                userQueue.put(str(user))
+                userListe.append(user)
+                #userQueue.put(str(user))
             return data
 
         if data[0:3] == "HEL":
@@ -145,23 +151,7 @@ class ClientDialog(QDialog):
         self.userList = QListView()
         self.userList.setWindowTitle("User List")
         self.model = QStandardItemModel(self.userList)
-        # foods = [
-        #     'Cookie dough', # Must be store-bought
-        #     'Hummus', # Must be homemade
-        #     'Spaghetti', # Must be saucy
-        #     'Dal makhani', # Must be spicy
-        #     'Chocolate whipped cream' # Must be plentiful
-        #     ]
-        #
-        # for food in foods:
-        #     # Create an item with a caption
-        #     item = QStandardItem(food)
-        #      # Add a checkbox to it
-        #     self.model.appendRow(item)
         self.userList.setModel(self.model)
-        #self.userList.show()
-
-
 
         #connect the Go button to its callback
         self.send_button.connect(self.send_button,SIGNAL('clicked()'),self.outgoing_parser)
@@ -208,14 +198,15 @@ class ClientDialog(QDialog):
         self.sendMessage.clear()
 
     def userListRefresh(self):
-
-        while (userQueue.qsize() > 0):
-            user = userQueue.get()
+        self.model.removeRows(0,self.model.rowCount())
+        for user in userListe:
             item = QStandardItem(user)
             self.model.appendRow(item)
+        # while (userQueue.qsize() > 0):
+        #     user = userQueue.get()
+        #     item = QStandardItem(user)
+        #     self.model.appendRow(item)
         #self.userList.setModel(self.model)
-
-
 
 
     def run(self):
@@ -226,12 +217,15 @@ class ClientDialog(QDialog):
 
 #connect to the server
 s = socket.socket()
+#host=sys.argv[1]
+#port=int(sys.argv[2])
 host = '178.233.19.205'
 port = 12345
 s.connect((host,port))
 sendQueue = Queue.Queue()
 screenQueue = Queue.Queue()
-userQueue = Queue.Queue()
+#userQueue = Queue.Queue()
+userListe = []
 
 app = ClientDialog (sendQueue,screenQueue)
 #start threads
