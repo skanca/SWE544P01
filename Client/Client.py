@@ -7,7 +7,9 @@ import sys
 from PyQt4.QtCore import *
 from PyQt4.QtGui import *
 
+#ReadThread class
 class ReadThread (threading.Thread):
+#ReadThread Initialization
     def __init__(self, name,csoc,threadQueue,screenQueue,app):
         threading.Thread.__init__(self)
         self.name = name
@@ -17,7 +19,7 @@ class ReadThread (threading.Thread):
         self.screenQueue = screenQueue #...
         self.app = app
 
-    #incoming parser
+#ReadThread incoming parser
     def incoming_parser(self,data):
         print ('INCOMING DATA: ', data)
 
@@ -27,6 +29,12 @@ class ReadThread (threading.Thread):
             response = "ERR"
             self.csoc.send(response)
             return "Error"
+        if data[0:3] == "LSA":
+            userList = data[4:].split(':')
+            for user in userList:
+                userQueue.put(str(user))
+            return data
+
         if data[0:3] == "HEL":
             inMessage=  'Yeni Kullanici olarak kabul edildiniz'
         elif data[0:3] == "REJ":
@@ -34,9 +42,6 @@ class ReadThread (threading.Thread):
 
         elif data[0:3] == "BYE":
             inMessage = 'Cikis'
-
-        elif data[0:3] == "LSA":
-            inMessage = 'LSA'
 
         elif data[0:3] == "TOC":
             inMessage = 'Baglanti testi basarili'
@@ -60,28 +65,35 @@ class ReadThread (threading.Thread):
             response = "ERR"
             self.csoc.send(response)
             return "Error"
-        inMessage = time.strftime("[%H:%M:%S]", time.gmtime()) + inMessage
+        inMessage = time.strftime("[%H:%M:%S] - Server: ", time.gmtime()) + inMessage
+
         print("inMessage = ",inMessage)
+
         return inMessage
 
-
-#
+#ReadThread run
     def run(self):
         while True:
             try:
                 data = self.csoc.recv(1024)
-                self.app.cprint(self.incoming_parser(data))
+                if data <> '':
+                    self.app.cprint(self.incoming_parser(data))
             except:
                 pass
             if data[0:3] == "BYE":
                 self.csoc.close()
 
+#WriteThread Class
 class WriteThread (threading.Thread):
+#WriteThread initialization
     def __init__(self,name,csoc, threadQueue):
         threading.Thread.__init__(self)
         self.name = name
         self.csoc = csoc
         self.threadQueue = threadQueue
+        #self.threadQueue.put('USR ceren')
+        #self.threadQueue.put('LSQ')
+#WriteThread run
     def run(self):
         while True:
             if self.threadQueue.qsize() > 0:
@@ -91,16 +103,12 @@ class WriteThread (threading.Thread):
                     self.csoc.send(queue_message)
                 except socket.error:
                     self.csoc.close()
-                    break
+#                    break
 
-#
+#ClientDialog Class
 class ClientDialog(QDialog):
-
+#ClientDialog initialization
     def __init__(self,threadQueue,screenQueue):
-        """
-
-        :rtype: object
-        """
         self.threadQueue = threadQueue
         self.screenQueue = screenQueue
 
@@ -135,6 +143,25 @@ class ClientDialog(QDialog):
 
         #the users' section
         self.userList = QListView()
+        self.userList.setWindowTitle("User List")
+        self.model = QStandardItemModel(self.userList)
+        # foods = [
+        #     'Cookie dough', # Must be store-bought
+        #     'Hummus', # Must be homemade
+        #     'Spaghetti', # Must be saucy
+        #     'Dal makhani', # Must be spicy
+        #     'Chocolate whipped cream' # Must be plentiful
+        #     ]
+        #
+        # for food in foods:
+        #     # Create an item with a caption
+        #     item = QStandardItem(food)
+        #      # Add a checkbox to it
+        #     self.model.appendRow(item)
+        self.userList.setModel(self.model)
+        #self.userList.show()
+
+
 
         #connect the Go button to its callback
         self.send_button.connect(self.send_button,SIGNAL('clicked()'),self.outgoing_parser)
@@ -150,33 +177,45 @@ class ClientDialog(QDialog):
         #start timer
         self.timer = QTimer()
         self.timer.timeout.connect(self.updateChannelWindow)
-        #update every 10 ms
-        self.timer.start(10)
+        # #update every 10 ms
+        self.timer.start(100)
 
+        self.timeruserList = QTimer()
+        self.timeruserList.timeout.connect(self.userListRefresh)
+        self.timeruserList.start(100)
         #use the vertical layout for the current window
         self.setLayout(self.vbox)
 
     def cprint(self,data):
-        #self.screenQueue.put(data)
-        self.messageArea.append(data)
+        self.screenQueue.put(str(data))
+        #self.messageArea.append(data)
 
     def updateChannelWindow(self):
         if self.screenQueue.qsize() > 0:
             queue_message = self.screenQueue.get()
             print('queue_message: ',queue_message)
-            # #...
-            # #...
-            # #...
-            # #self.channel.append(...)
-
+            self.messageArea.append(queue_message)
+        #####listqueue???da update olmali
 
     def outgoing_parser(self):
         #self.messageArea.append("Hello QTextBrowser")
         #self.messageArea.append(self.sendMessage.text())
         outMessage = self.sendMessage.text()
         print(outMessage)
+        outtext = time.strftime("[%H:%M:%S] - Local - : ", time.gmtime())+outMessage
+        self.cprint(outtext)
         self.threadQueue.put(str(outMessage))
         self.sendMessage.clear()
+
+    def userListRefresh(self):
+
+        while (userQueue.qsize() > 0):
+            user = userQueue.get()
+            item = QStandardItem(user)
+            self.model.appendRow(item)
+        #self.userList.setModel(self.model)
+
+
 
 
     def run(self):
@@ -192,6 +231,8 @@ port = 12345
 s.connect((host,port))
 sendQueue = Queue.Queue()
 screenQueue = Queue.Queue()
+userQueue = Queue.Queue()
+
 app = ClientDialog (sendQueue,screenQueue)
 #start threads
 rt = ReadThread("ReadThread",s,sendQueue,screenQueue,app)
